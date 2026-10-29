@@ -1,0 +1,66 @@
+# Reusable PR gate ("PR Pipeline Enforcement" in the diagram).
+# Application repos call this with:
+#   jobs:
+#     standards:
+#       uses: gmale747/tech-standards/.github/workflows/standards-check.yml@main
+name: Standards check (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      fail-on:
+        description: "Lowest level that fails the job: fail | warn | never"
+        type: string
+        default: fail
+      standards-ref:
+        description: "Branch or tag of tech-standards to check against"
+        type: string
+        default: main
+
+jobs:
+  standards-check:
+    name: Standards check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the application repository
+        uses: actions/checkout@v5
+
+      - name: Check out the central standards repository
+        uses: actions/checkout@v5
+        with:
+          repository: gmale747/tech-standards
+          ref: ${{ inputs.standards-ref }}
+          path: .standards-repo
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - run: pip install pyyaml
+
+      - name: Validate against the manifest
+        id: check
+        run: |
+          python .standards-repo/skills/standards-check/scripts/check_standards.py \
+            --repo . \
+            --manifest .standards-repo/manifest/technology-manifest.yaml \
+            --format both --out compliance-report \
+            --fail-on ${{ inputs.fail-on }}
+
+      - name: Post report on the pull request
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true   # forks have a read-only token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} \
+            --body-file compliance-report.md --edit-last --create-if-none \
+          || gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} \
+            --body-file compliance-report.md
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-report
+          path: compliance-report.*

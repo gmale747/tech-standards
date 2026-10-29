@@ -1,0 +1,262 @@
+# =============================================================================
+# Technology Standards Manifest  (single source of truth)
+# -----------------------------------------------------------------------------
+# Read by:  the standards-check Copilot skill (developer, on demand)
+#           the reusable PR workflow (enforcement, every pull request)
+#           tools/audit.py (monitoring + technology audit across all repos)
+# Change process: pull request + CODEOWNERS approval (see policies/governance-policy.md GOV-05)
+# =============================================================================
+manifest_version: 1.0.0
+last_updated: 2026-10-22
+owner: Enterprise Architecture
+policies_base_url: https://github.com/gmale747/tech-standards/blob/main/policies
+
+# Severity ladder used everywhere:
+#   approved   -> PASS      (no action)
+#   caution    -> CAUTION   (allowed; plan an upgrade)
+#   deprecated -> WARN      (allowed until sunset date, then FAIL)
+#   prohibited -> FAIL      (blocks the pull request unless an exception exists)
+# A dependency that is not listed at all -> WARN (needs architecture review, TECH-00)
+
+# -----------------------------------------------------------------------------
+# 1. Approved technologies (frameworks / libraries / dependencies)
+#    versions: first matching range wins. Ranges use >=, >, <=, <, == separated by spaces.
+# -----------------------------------------------------------------------------
+technologies:
+  - name: bootstrap
+    category: frontend-framework
+    ecosystems: [npm, cdn]
+    versions:
+      - range: ">=5.3.0 <6.0.0"
+        status: approved
+      - range: ">=5.0.0 <5.3.0"
+        status: caution
+        note: Upgrade to 5.3.x (color modes, security fixes).
+      - range: ">=4.0.0 <5.0.0"
+        status: deprecated
+        sunset: 2026-12-31
+        note: Bootstrap 4 is end-of-life upstream. Migrate to 5.3.x.
+      - range: "<4.0.0"
+        status: prohibited
+        note: Bootstrap 3 and older have known XSS issues (CVE-2019-8331).
+
+  - name: jquery
+    category: frontend-library
+    ecosystems: [npm, cdn]
+    versions:
+      - range: ">=3.7.0 <4.0.0"
+        status: approved
+      - range: ">=3.5.0 <3.7.0"
+        status: caution
+        note: Upgrade to 3.7.x.
+      - range: "<3.5.0"
+        status: prohibited
+        note: XSS vulnerabilities (CVE-2020-11022, CVE-2020-11023).
+
+  - name: papaparse
+    aliases: [PapaParse]
+    category: data-parsing
+    ecosystems: [npm, cdn]
+    versions:
+      - range: ">=5.4.0"
+        status: approved
+      - range: "<5.4.0"
+        status: caution
+        note: Upgrade to 5.4.x or later.
+
+  - name: react
+    category: frontend-framework
+    ecosystems: [npm, cdn]
+    versions:
+      - range: ">=18.0.0"
+        status: approved
+      - range: ">=17.0.0 <18.0.0"
+        status: deprecated
+        sunset: 2026-06-30
+        note: React 17 support ended. Upgrade to 18 or 19.
+      - range: "<17.0.0"
+        status: prohibited
+
+  - name: angular
+    aliases: [angularjs, angular.js]
+    category: frontend-framework
+    ecosystems: [npm, cdn]
+    versions:
+      - range: "*"
+        status: prohibited
+        note: AngularJS (1.x) reached end of life in 2021. Use an approved framework.
+
+  - name: lodash
+    category: utility-library
+    ecosystems: [npm, cdn]
+    versions:
+      - range: ">=4.17.21"
+        status: approved
+      - range: "<4.17.21"
+        status: prohibited
+        note: Prototype pollution / command injection (CVE-2021-23337).
+
+  - name: moment
+    category: utility-library
+    ecosystems: [npm, cdn]
+    versions:
+      - range: "*"
+        status: deprecated
+        sunset: 2027-06-30
+        note: Moment.js is in maintenance mode. Use Intl or date-fns for new work.
+
+  - name: log4j-core
+    aliases: [org.apache.logging.log4j:log4j-core]
+    category: logging
+    ecosystems: [maven]
+    versions:
+      - range: ">=2.17.1"
+        status: approved
+      - range: "<2.17.1"
+        status: prohibited
+        note: Log4Shell family (CVE-2021-44228, CVE-2021-45046, CVE-2021-44832).
+
+  - name: requests
+    category: http-client
+    ecosystems: [pip]
+    versions:
+      - range: ">=2.32.0"
+        status: approved
+      - range: "<2.32.0"
+        status: caution
+        note: Upgrade for certificate-verification fix (CVE-2024-35195).
+
+# -----------------------------------------------------------------------------
+# 2. Approved CDNs (SEC-03). Any other external script/style host fails.
+# -----------------------------------------------------------------------------
+approved_cdns:
+  - cdn.jsdelivr.net
+  - cdnjs.cloudflare.com
+
+# -----------------------------------------------------------------------------
+# 3. Required files (DOC / GOV)
+# -----------------------------------------------------------------------------
+required_files:
+  - path: app-record.yaml
+    policy: GOV-01
+  - path: README.md
+    policy: DOC-01
+  - path: docs/runbook.md
+    policy: DOC-02
+  - path: SECURITY.md
+    policy: DOC-03
+
+# -----------------------------------------------------------------------------
+# 4. App record (CMDB) rules for app-record.yaml (GOV-02)
+# -----------------------------------------------------------------------------
+app_record:
+  required_fields:
+    - app.id
+    - app.name
+    - app.description
+    - app.ownership.department
+    - app.ownership.owner
+    - app.ownership.escalation_contact
+    - app.access.visibility
+    - app.access.data_classification
+    - app.metadata.version
+    - app.metadata.lifecycle
+    - app.repositories.primary_repo
+  allowed_values:
+    app.access.visibility: [public, internal, restricted]
+    app.access.data_classification: [public, not-public, private, confidential]
+    app.metadata.lifecycle: [development, production, retiring, retired]
+  departments:
+    - Transportation Systems
+    - Public Safety
+    - IT Infrastructure
+    - Finance and Administration
+
+# -----------------------------------------------------------------------------
+# 5. Code / content rules (automated checks)
+#    check types are implemented in skills/standards-check/scripts/check_standards.py
+# -----------------------------------------------------------------------------
+rules:
+  - id: SEC-01
+    title: No secrets in source code
+    check: forbidden_pattern
+    severity: fail
+    files: ["*.js", "*.ts", "*.py", "*.java", "*.html", "*.json", "*.yml", "*.yaml", "*.env", "*.properties", "*.cs", "*.config"]
+    patterns:
+      - '(?i)(api[_-]?key|secret|password|passwd|token)\s*[:=]\s*["''][^"''\s]{8,}["'']'
+      - 'AKIA[0-9A-Z]{16}'
+      - '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'
+
+  - id: SEC-03
+    title: Third-party resources only from approved CDNs
+    check: approved_cdn
+    severity: fail
+    files: ["*.html", "*.htm"]
+
+  - id: SEC-04
+    title: Subresource Integrity on every CDN script and stylesheet
+    check: external_resource_integrity
+    severity: fail
+    files: ["*.html", "*.htm"]
+
+  - id: SEC-05
+    title: HTTPS only for external resources
+    check: forbidden_pattern
+    severity: fail
+    files: ["*.html", "*.htm"]
+    patterns:
+      - '(?i)<(script|link|img|iframe)[^>]+(src|href)\s*=\s*["'']http://(?!localhost)'
+
+  - id: SEC-06
+    title: Safe DOM output (no innerHTML assignment, no eval)
+    check: forbidden_pattern
+    severity: warn
+    files: ["*.js", "*.ts", "*.html"]
+    patterns:
+      - '\.innerHTML\s*\+?='
+      - '\beval\s*\('
+      - 'document\.write\s*\('
+
+  - id: SEC-07
+    title: Content-Security-Policy on every HTML page
+    check: required_pattern
+    severity: warn
+    files: ["*.html", "*.htm"]
+    patterns:
+      - '(?i)http-equiv\s*=\s*["'']Content-Security-Policy["'']'
+
+  - id: A11Y-01
+    title: Page language declared
+    check: required_pattern
+    severity: fail
+    files: ["*.html", "*.htm"]
+    patterns:
+      - '(?i)<html[^>]*\slang\s*=\s*["''][a-z]{2}'
+
+  - id: A11Y-02
+    title: Every image has an alt attribute
+    check: img_alt
+    severity: warn
+    files: ["*.html", "*.htm"]
+
+  - id: DOC-04
+    title: Documentation is Markdown in the repo (no Word files as source)
+    check: forbidden_file
+    severity: warn
+    files: ["*.docx", "*.doc"]
+
+# Folders never scanned (skills and the central standards checkout contain sample patterns)
+scan:
+  exclude_dirs: [.git, node_modules, .github/skills, .agents/skills, .claude/skills, .standards-repo, .standards-cache, dist, build, vendor]
+
+# -----------------------------------------------------------------------------
+# 6. Approved exceptions (GOV-04). A matching exception turns FAIL into WARN until it expires.
+# -----------------------------------------------------------------------------
+exceptions:
+  - app_id: legacy-permit-portal
+    technology: jquery
+    version: "3.4.1"
+    expires: 2027-03-31
+    approved_by: Enterprise Architecture Review Board
+    ticket: EXC-2026-014
+    reason: Vendor-supplied plugin requires jQuery 3.4; replacement scheduled for Q1 2027.

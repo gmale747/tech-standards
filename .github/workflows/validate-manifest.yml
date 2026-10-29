@@ -1,0 +1,24 @@
+# Protects the source of truth: every change to the manifest must still parse and run.
+name: Validate manifest
+
+on:
+  pull_request:
+    paths: ["manifest/**", "skills/**", "tools/**"]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - name: Manifest parses and the engine runs
+        run: |
+          python skills/standards-check/scripts/check_standards.py \
+            --manifest manifest/technology-manifest.yaml --lookup bootstrap 5.3.3
+          python skills/standards-check/scripts/check_standards.py \
+            --manifest manifest/technology-manifest.yaml --repo . --fail-on never > /dev/null
